@@ -1,11 +1,30 @@
+/*
+ * Copyright (c) 2004-2020 The YAWL Foundation. All rights reserved.
+ * The YAWL Foundation is a collaboration of individuals and
+ * organisations who are committed to improving workflow technology.
+ *
+ * This file is part of YAWL. YAWL is free software: you can
+ * redistribute it and/or modify it under the terms of the GNU Lesser
+ * General Public License as published by the Free Software Foundation.
+ *
+ * YAWL is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ * or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General
+ * Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with YAWL. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 package org.yawlfoundation.yawl.engine;
 
+import org.yawlfoundation.yawl.elements.YTask;
 import org.yawlfoundation.yawl.elements.state.YIdentifier;
+import org.yawlfoundation.yawl.util.JDOMUtil;
+import org.yawlfoundation.yawl.util.StringUtil;
 import org.yawlfoundation.yawl.util.XNode;
 
-import java.util.Date;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * @author Michael Adams
@@ -22,17 +41,25 @@ public class CaseExporter {
 
 
     public String exportAll() {
-        XNode root = new XNode("cases");
-        for (YIdentifier caseID : _engine.getRunningCaseIDs()) {
-            root.addChild(getCaseNode(caseID));
-        }
-        return root.toString();
+        return export(_engine.getRunningCaseIDs());
     }
 
 
     public String export(YIdentifier caseID) {
+        return export(Collections.<YIdentifier>singletonList(caseID));
+    }
+
+
+    public String export(String caseCSV) {
+        return export(csvToIdentifierList(caseCSV));
+    }
+
+
+    private String export(List<YIdentifier> caseList) {
         XNode root = new XNode("cases");
-        root.addChild(getCaseNode(caseID));
+        for (YIdentifier caseID : caseList) {
+            root.addChild(getCaseNode(caseID));
+        }
         return root.toString();
     }
 
@@ -58,8 +85,8 @@ public class CaseExporter {
             nRunner.addChild("starttime", runner.getStartTime());
             nRunner.addChild("observer", runner.get_caseObserverStr());
             nRunner.addChild("executionstatus", runner.getExecutionStatus());
-            nRunner.addChild(getMarkedTasks("enabled", runner.getEnabledTaskNames()));
-            nRunner.addChild(getMarkedTasks("busy", runner.getBusyTaskNames()));
+            nRunner.addChild(getEnabledTasks(runner));
+            nRunner.addChild(getBusyTasks(runner));
             nRunner.addChild(getTimerStates(runner.get_timerStates()));
         }
         return nRunners;
@@ -83,11 +110,25 @@ public class CaseExporter {
     }
 
 
-    private XNode getMarkedTasks(String tag, Set<String> taskNames) {
-        XNode nTasks = new XNode(tag + "tasks");
-        for (String taskName : taskNames) {
-            nTasks.addChild("task", taskName);
-        }
+    private XNode getEnabledTasks(YNetRunner runner) {
+        XNode nTasks = new XNode("enabledtasks");
+        runner.getEnabledTaskNames().forEach(e -> nTasks.addChild("task", e));
+        return nTasks;
+    }
+
+
+    private XNode getBusyTasks(YNetRunner runner) {
+        XNode nTasks = new XNode("busytasks");
+        runner.getBusyTasks().forEach(b -> {
+            XNode nTask = nTasks.addChild("task");
+            nTask.addChild("name", b.getID());
+            if (b.isMultiInstance()) {
+                String doc = b.getMIOutputData().getDataDocString();
+                XNode miNode = nTask.addChild("midata");
+                miNode.addContent(doc);
+                miNode.addAttribute("uid", b.getMIOutputData().getUniqueIdentifier());
+            }
+        });
         return nTasks;
     }
 
@@ -98,7 +139,9 @@ public class CaseExporter {
         nID.addChild(getLocations(id));
         XNode nChildren = nID.addChild("children");
         for (YIdentifier child : id.getChildren()) {
-             nChildren.addChild(getIdentifier(child));
+            if (child != null) {
+                nChildren.addChild(getIdentifier(child));
+            }
         }
         return nID;
     }
@@ -147,8 +190,21 @@ public class CaseExporter {
 
     private XNode getWIData(YWorkItem item) {
         XNode nData = new XNode("data");
-        nData.addContent(item.getDataString());
+        nData.addContent(item.get_dataString());
         return nData;
+    }
+
+
+    private void addMIDataIfRequired(XNode taskNode, YIdentifier runnerID, String taskName) {
+        YNetRunner runner = _engine.getNetRunner(runnerID);
+        for (YTask task : runner.getBusyTasks()) {
+            if (task.getName().equals(taskName)) {
+                if (task.isMultiInstance()) {
+                    String doc = task.getMIOutputData().getDataDocString();
+                    taskNode.addChild("midata", JDOMUtil.encodeEscapes(doc));
+                }
+            }
+        }
     }
 
 
@@ -159,6 +215,46 @@ public class CaseExporter {
 
     private long getTime(Date date) {
         return date != null ? date.getTime() : 0;
+    }
+
+
+    private List<YIdentifier> csvToIdentifierList(String csv) {
+        if (csv == null) return Collections.emptyList();
+        List<YIdentifier> caseList = new ArrayList<>();
+        String[] caseArray = csv.split("\\s*,\\s*");
+        for (String caseStr : caseArray) {
+            if (StringUtil.isNullOrEmpty(caseStr)) continue;
+            if (caseStr.contains("-")) {
+                caseList.addAll(getCasesInRange(caseStr));
+            }
+            else {
+                addCaseToList(caseList, caseStr);
+            }
+        }
+        return caseList;
+    }
+
+
+    private List<YIdentifier> getCasesInRange(String caseStr) {
+        List<YIdentifier> caseList = new ArrayList<>();
+        String[] caseArray = caseStr.split("\\s*-\\s*");
+        int a = StringUtil.strToInt(caseArray[0], Integer.MAX_VALUE);
+        int b = StringUtil.strToInt(caseArray[1], Integer.MAX_VALUE);
+        if (a == Integer.MAX_VALUE || b == Integer.MAX_VALUE) {
+            return caseList;
+        }
+        for (int caseNbr = Math.min(a, b); caseNbr <= Math.max(a, b); caseNbr++) {
+            addCaseToList(caseList, String.valueOf(caseNbr));
+         }
+        return caseList;
+    }
+
+
+    private void addCaseToList(List<YIdentifier> caseList, String caseStr) {
+        YIdentifier caseID = _engine.getCaseID(caseStr);
+        if (caseID  != null) {
+            caseList.add(caseID);
+        }
     }
 
 }

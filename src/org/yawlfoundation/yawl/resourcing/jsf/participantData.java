@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2012 The YAWL Foundation. All rights reserved.
+ * Copyright (c) 2004-2020 The YAWL Foundation. All rights reserved.
  * The YAWL Foundation is a collaboration of individuals and
  * organisations who are committed to improving workflow technology.
  *
@@ -18,31 +18,14 @@
 
 package org.yawlfoundation.yawl.resourcing.jsf;
 
-import javax.faces.FacesException;
-import javax.faces.event.ValueChangeEvent;
-
+import com.sun.rave.web.ui.appbase.AbstractPageBean;
+import com.sun.rave.web.ui.component.*;
 import org.yawlfoundation.yawl.resourcing.resource.Participant;
 import org.yawlfoundation.yawl.resourcing.resource.UserPrivileges;
 import org.yawlfoundation.yawl.resourcing.rsInterface.ResourceGatewayException;
 
-import com.sun.rave.web.ui.appbase.AbstractPageBean;
-import com.sun.rave.web.ui.component.Body;
-import com.sun.rave.web.ui.component.Button;
-import com.sun.rave.web.ui.component.Checkbox;
-import com.sun.rave.web.ui.component.DropDown;
-import com.sun.rave.web.ui.component.Form;
-import com.sun.rave.web.ui.component.Head;
-import com.sun.rave.web.ui.component.Html;
-import com.sun.rave.web.ui.component.Label;
-import com.sun.rave.web.ui.component.Link;
-import com.sun.rave.web.ui.component.Page;
-import com.sun.rave.web.ui.component.PanelLayout;
-import com.sun.rave.web.ui.component.PasswordField;
-import com.sun.rave.web.ui.component.StaticText;
-import com.sun.rave.web.ui.component.Tab;
-import com.sun.rave.web.ui.component.TabSet;
-import com.sun.rave.web.ui.component.TextArea;
-import com.sun.rave.web.ui.component.TextField;
+import javax.faces.FacesException;
+import javax.faces.event.ValueChangeEvent;
 
 /**
  *  Backing bean for the participant data or 'User Mgt' form.
@@ -219,13 +202,6 @@ public class participantData extends AbstractPageBean {
     public void setLblPassword(Label l) { lblPassword = l; }
 
 
-    private Label lblMail = new Label();
-
-    public Label getLblMail() { return lblMail; }
-
-    public void setLblMail(Label l) { lblMail = l; }
-
-
     private Label lblConfirm = new Label();
 
     public Label getLblConfirm() { return lblConfirm; }
@@ -308,13 +284,6 @@ public class participantData extends AbstractPageBean {
     public TextField getTxtUserID() { return txtUserID; }
 
     public void setTxtUserID(TextField tf) { txtUserID = tf; }
-
-
-    private TextField txtMail = new TextField();
-
-    public TextField getTxtMail() { return txtMail; }
-
-    public void setTxtMail(TextField tf) { txtMail = tf; }
 
 
     private Checkbox cbxAdmin = new Checkbox();
@@ -685,7 +654,6 @@ public class participantData extends AbstractPageBean {
         txtDesc.setText(p.getDescription());
         txtNotes.setText(p.getNotes());
         cbxAdmin.setValue(p.isAdministrator());
-        txtMail.setText(p.getMail());
 
         // clear any leftover passwords
         txtNewPassword.setPassword("");
@@ -713,7 +681,6 @@ public class participantData extends AbstractPageBean {
         txtFirstName.setText("");
         txtLastName.setText("");
         txtUserID.setText("");
-        txtMail.setText("");
         txtDesc.setText("");
         txtNotes.setText("");
         cbxAdmin.setValue("");
@@ -743,7 +710,6 @@ public class participantData extends AbstractPageBean {
             txtFirstName.setDisabled(!enabled);
             txtLastName.setDisabled(!enabled);
             txtUserID.setDisabled(!enabled);
-            txtMail.setDisabled(!enabled);
             txtDesc.setDisabled(!enabled);
             txtNotes.setDisabled(!enabled);
             cbxAdmin.setDisabled(!enabled);
@@ -771,13 +737,12 @@ public class participantData extends AbstractPageBean {
     private void saveChanges(Participant p) {
 
         // update fields     
-        p.setFirstName((String) txtFirstName.getText());
-        p.setLastName((String) txtLastName.getText());
-        p.setUserID((String) txtUserID.getText());
-        p.setDescription((String) txtDesc.getText());
-        p.setNotes((String) txtNotes.getText());
+        p.setFirstName(_sb.stripXMLChars((String) txtFirstName.getText()));
+        p.setLastName(_sb.stripXMLChars((String) txtLastName.getText()));
+        p.setUserID(_sb.stripXMLChars((String) txtUserID.getText()));
+        p.setDescription(_sb.stripXMLChars((String) txtDesc.getText()));
+        p.setNotes(_sb.stripXMLChars((String) txtNotes.getText()));
         p.setAdministrator((Boolean) cbxAdmin.getValue());
-        p.setMail((String) txtMail.getText());
 
         // only change password if a new one is entered and after its been validated
         String password = (String) txtNewPassword.getPassword();

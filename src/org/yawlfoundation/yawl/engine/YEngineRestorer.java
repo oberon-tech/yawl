@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2012 The YAWL Foundation. All rights reserved.
+ * Copyright (c) 2004-2020 The YAWL Foundation. All rights reserved.
  * The YAWL Foundation is a collaboration of individuals and
  * organisations who are committed to improving workflow technology.
  *
@@ -31,7 +31,9 @@ import org.yawlfoundation.yawl.engine.time.YLaunchDelayer;
 import org.yawlfoundation.yawl.engine.time.YTimedObject;
 import org.yawlfoundation.yawl.engine.time.YTimer;
 import org.yawlfoundation.yawl.engine.time.YWorkItemTimer;
+import org.yawlfoundation.yawl.exceptions.YDataStateException;
 import org.yawlfoundation.yawl.exceptions.YPersistenceException;
+import org.yawlfoundation.yawl.exceptions.YQueryException;
 import org.yawlfoundation.yawl.logging.YEventLogger;
 import org.yawlfoundation.yawl.unmarshal.YMarshal;
 import org.yawlfoundation.yawl.util.JDOMUtil;
@@ -52,6 +54,8 @@ public class YEngineRestorer {
     private Map<String, YIdentifier> _idLookupTable;
     private List<YNetRunner> _runners;
     private Map<String, YTask> _taskLookupTable;
+    private Map<String, GroupedMIOutputData> _miOutputDataLookupTable;
+    private List<YTask> _miTasks;
     private boolean _hasServices;
     private boolean _importingCases = false;
     private Set<YClient> _addedDefaultClients;
@@ -67,6 +71,8 @@ public class YEngineRestorer {
         _pmgr = pmgr;
         _idLookupTable = new HashMap<String, YIdentifier>();
         _taskLookupTable = new HashMap<String, YTask>();
+        _miOutputDataLookupTable = new HashMap<>();
+        _miTasks = new ArrayList<>();
         _log = LogManager.getLogger(this.getClass());
     }
 
@@ -78,10 +84,12 @@ public class YEngineRestorer {
 
 
     protected void restoreInstances() throws YPersistenceException {
+        restoreGroupedMIOutputData();
         restoreProcessInstances();
         restoreWorkItems();
+        resortMultiInstanceStartingData();
     }
-
+    
 
     /**
      * Restores YAWL Services from persistence
@@ -162,6 +170,8 @@ public class YEngineRestorer {
         return caseNbrStore;
     }
 
+    
+
 
     protected void restoreProcessInstances() throws YPersistenceException {
         _log.debug("Restoring process instances - Starts");
@@ -172,11 +182,10 @@ public class YEngineRestorer {
     }
 
 
-    // called directly by CaseImporter
+    // called directly by CaseImporter or from above method 
     protected void restoreProcessInstances(List<YNetRunner> runners) throws YPersistenceException {
         _log.debug("Restoring {} net runners", runners.size());
-        _runners = runners;
-        restoreRunners(_runners);
+        _runners = restoreRunners(runners);
         _log.debug("Restoring process instances - Ends");
     }
 
@@ -234,6 +243,8 @@ public class YEngineRestorer {
             }
 
             witem.setTask(getTaskReference(witem.getSpecificationID(), taskID));
+            
+            witem.setEngine(_engine);
             witem.addToRepository();
 
             // MJF: for any work items with data, restore to netrunner instance
@@ -243,6 +254,21 @@ public class YEngineRestorer {
         removeWorkItems(toBeRemoved);
 
         _log.debug("Restoring work items - Ends");
+    }
+
+
+    protected void restoreGroupedMIOutputData() throws YPersistenceException {
+        for (GroupedMIOutputData miOutputData : restoreObjects(GroupedMIOutputData.class)) {
+            Hibernate.initialize(miOutputData);
+            _miOutputDataLookupTable.put(miOutputData.getUniqueIdentifier(), miOutputData);
+        }
+    }
+
+
+    // from CaseImporter
+    protected void setGroupedMIOutputData(Set<GroupedMIOutputData> miOutputDataSet) {
+        miOutputDataSet.forEach(miData ->
+                _miOutputDataLookupTable.put(miData.getUniqueIdentifier(), miData));
     }
 
 
@@ -390,7 +416,8 @@ public class YEngineRestorer {
 
     private Map<String, YNetRunner> restoreNets(List<YNetRunner> runners)
             throws YPersistenceException {
-        Map<String, YNetRunner> result = new HashMap<String, YNetRunner>();
+        Map<String, YNetRunner> runnerMap = new HashMap<String, YNetRunner>();
+        Set<YNetRunner> orphanedRunners = new HashSet<>();
 
         // restore all root nets first
         for (YNetRunner runner : runners) {
@@ -398,7 +425,7 @@ public class YEngineRestorer {
             if (runner.getContainingTaskID() == null) { // this is a root net runner
                 YNet net = (YNet) getSpecification(runner).getRootNet().clone();
                 runner.setNet(net);
-                result.put(runner.getCaseID().toString(), runner);
+                runnerMap.put(runner.getCaseID().toString(), runner);
             }
         }
 
@@ -409,7 +436,7 @@ public class YEngineRestorer {
                 // Find the parent runner
                 String runnerID = runner.getCaseID().toString();
                 String parentID = runnerID.substring(0, runnerID.lastIndexOf("."));
-                YNetRunner parentrunner = result.get(parentID);
+                YNetRunner parentrunner = runnerMap.get(parentID);
                 if (parentrunner != null) {
                     _log.debug("Restoring composite YNetRunner: {}", parentID);
                     YNet parentnet = parentrunner.getNet();
@@ -426,17 +453,24 @@ public class YEngineRestorer {
                                 runner.getCaseID().toString());
                         throw new YPersistenceException(msg);
                     }
-                    result.put(runner.getCaseID().toString(), runner);
+                    runnerMap.put(runner.getCaseID().toString(), runner);
+                }
+                else {
+                    orphanedRunners.add(runner); // literally has no parent
                 }
             }
         }
-        return result;
+
+        // orphaned runners are remnants of completed mi subnets so can be removed
+        unpersistObjects(orphanedRunners);
+        
+        return runnerMap;
     }
 
 
-    private void restoreRunners(List<YNetRunner> runners) throws YPersistenceException {
+    private List<YNetRunner> restoreRunners(List<YNetRunner> runners) throws YPersistenceException {
         Map<String, YNetRunner> runnerMap = restoreNets(runners);
-        for (YNetRunner runner : runners) {
+        for (YNetRunner runner : runnerMap.values()) {
             YNet net = runner.getNet();
             if (runner.getContainingTaskID() == null) {
 
@@ -465,6 +499,8 @@ public class YEngineRestorer {
             runner.refreshAnnouncements();
         }
         if (! _importingCases) removeOrphanedIdentifiers();
+
+        return new ArrayList<>(runnerMap.values());
     }
 
 
@@ -523,7 +559,26 @@ public class YEngineRestorer {
                 if (element instanceof YTask) {
                     task = (YTask) element;
                     task.setI(id);
-                    task.prepareDataDocsForTaskOutput();
+                    if (task.isMultiInstance()) {
+                        _miTasks.add(task);
+                        try {
+                            task.determineHowManyInstancesToCreate();
+                        }
+                        catch (YDataStateException | YQueryException e) {
+                            _log.warn("Failed to restore data for unstarted MI work items");
+                        }
+                    }
+
+                    task.prepareDataDocsForTaskOutput(null);
+                    
+                    if (task.isMultiInstance()) {
+                        String uniqueID = id.get_idString() + ":" + task.getID();
+                        GroupedMIOutputData miOutputData = _miOutputDataLookupTable.get(uniqueID);
+                        if (miOutputData != null) {
+                            task.setGroupedMultiInstanceOutputData(miOutputData);
+                        }
+                    }
+
                     id.addLocation(null, task);
                 } else if (element instanceof YCondition) {
                     ((YConditionInterface) element).add(_pmgr, id);
@@ -534,6 +589,35 @@ public class YEngineRestorer {
         _idLookupTable.put(id.toString(), id);
         return id;
     }
+
+
+    protected void resortMultiInstanceStartingData() {
+
+        // completed mi child items need to be readded to the item repository
+        // so they appear in subsequent case state exports
+        for (GroupedMIOutputData miOutputData : _miOutputDataLookupTable.values()) {
+            for (YWorkItem item : miOutputData.getCompletedWorkItems()) {
+                for (YTask task : _miTasks) {
+                    if (item.getTaskID().equals(task.getID())) {
+                        item.setTask(task);
+                        break;
+                    }
+                }
+                for (YWorkItem parent : _engine.getWorkItemRepository().getParentWorkItems()) {
+                    String parentID = parent.getCaseID().toString();
+                    if (item.getWorkItemID().getCaseID().toString().startsWith(parentID + ".")) {
+                        item.getCaseID().set_parent(parent.getCaseID());
+                        break;
+                    }
+                }
+                item.setEngine(_engine);
+                item.addToRepository();
+            }
+        }
+
+        _miTasks.forEach(YTask::sortMultiInstanceStartingData);
+    }
+
 
 
     /**

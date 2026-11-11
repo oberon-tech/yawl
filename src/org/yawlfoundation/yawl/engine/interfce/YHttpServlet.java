@@ -1,13 +1,34 @@
+/*
+ * Copyright (c) 2004-2020 The YAWL Foundation. All rights reserved.
+ * The YAWL Foundation is a collaboration of individuals and
+ * organisations who are committed to improving workflow technology.
+ *
+ * This file is part of YAWL. YAWL is free software: you can
+ * redistribute it and/or modify it under the terms of the GNU Lesser
+ * General Public License as published by the Free Software Foundation.
+ *
+ * YAWL is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ * or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General
+ * Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with YAWL. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 package org.yawlfoundation.yawl.engine.interfce;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.yawlfoundation.yawl.util.PasswordEncryptor;
 import org.yawlfoundation.yawl.util.StringUtil;
 
 import javax.servlet.ServletContext;
 import javax.servlet.http.HttpServlet;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Driver;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -58,6 +79,16 @@ public class YHttpServlet extends HttpServlet {
     protected double getDoubleFromContext(String param) {
         String s = getServletContext().getInitParameter(param);
         return StringUtil.strToDouble(s, -1);
+    }
+
+
+    protected String encryptPassword(String s) {
+        try {
+            return PasswordEncryptor.encrypt(s);
+        } catch (NoSuchAlgorithmException | UnsupportedEncodingException nsae) {
+            // nothing to do - call will return 'incorrect password'
+            return s;
+        }
     }
 
 

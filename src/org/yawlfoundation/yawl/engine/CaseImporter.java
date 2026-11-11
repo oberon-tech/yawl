@@ -1,7 +1,26 @@
+/*
+ * Copyright (c) 2004-2020 The YAWL Foundation. All rights reserved.
+ * The YAWL Foundation is a collaboration of individuals and
+ * organisations who are committed to improving workflow technology.
+ *
+ * This file is part of YAWL. YAWL is free software: you can
+ * redistribute it and/or modify it under the terms of the GNU Lesser
+ * General Public License as published by the Free Software Foundation.
+ *
+ * YAWL is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ * or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General
+ * Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with YAWL. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 package org.yawlfoundation.yawl.engine;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.yawlfoundation.yawl.elements.GroupedMIOutputData;
 import org.yawlfoundation.yawl.elements.state.YIdentifier;
 import org.yawlfoundation.yawl.exceptions.YEngineStateException;
 import org.yawlfoundation.yawl.exceptions.YPersistenceException;
@@ -19,9 +38,12 @@ public class CaseImporter {
 
     private final YEngine _engine;
     private final Logger _log = LogManager.getLogger(this.getClass());
+    private Set<GroupedMIOutputData> _miOutputDataSet;
+
 
     public CaseImporter(YEngine engine) {
         _engine = engine;
+        _miOutputDataSet = new HashSet<>();
     }
 
 
@@ -33,9 +55,15 @@ public class CaseImporter {
             runners.addAll(makeRunnerList(caseNode));
             workitems.addAll(makeWorkItemList(caseNode));
         }
-        Collections.sort(runners, new RunnerComparator());
+        runners.sort(new RunnerComparator());
 
         importAndStart(runners, workitems);
+
+        // cases must be persisted to be able to continue
+        persistAll(runners, workitems);
+
+        // tell the services about the imported workitems
+        _engine.getAnnouncer().reannounceRestoredItems();
 
         return root.getChildCount();
     }
@@ -54,6 +82,7 @@ public class CaseImporter {
             throws YPersistenceException {
         YEngineRestorer restorer = new YEngineRestorer(_engine, YEngine._pmgr);
         restorer.setImportingCases(true);
+        restorer.setGroupedMIOutputData(_miOutputDataSet);
         restorer.restoreProcessInstances(runners);
         restorer.restoreWorkItems(workitems);
         restorer.restartRestoredProcessInstances();
@@ -97,7 +126,7 @@ public class CaseImporter {
         runner.setNetData(makeNetData(caseID.toString(), nRunner.getChild("netdata")));
         runner.set_caseObserverStr(nRunner.getChildText("observer"));
         runner.setEnabledTaskNames(toSet(nRunner.getChild("enabledtasks")));
-        runner.setBusyTaskNames(toSet(nRunner.getChild("busytasks")));
+        runner.setBusyTaskNames(getBusyTaskNames(nRunner.getChild("busytasks")));
         runner.set_timerStates(makeTimerStates(nRunner.getChild("timerstates")));
         return runner;
     }
@@ -293,7 +322,105 @@ public class CaseImporter {
     }
 
 
-    class RunnerComparator implements Comparator<YNetRunner> {
+    private Set<String> getBusyTaskNames(XNode node) {
+        Set<String> taskNames = new HashSet<String>();
+        for (XNode nTask : node.getChildren()) {
+            taskNames.add(nTask.getChild("name").getText());
+
+            // collect in-progress mi output data, if any
+            XNode nMIData = nTask.getChild("midata");
+            if (nMIData != null) {
+                GroupedMIOutputData outputData = new GroupedMIOutputData();
+                outputData.setUniqueIdentifier(nMIData.getAttributeValue("uid"));
+                outputData.setDataDocString(nMIData.getChild().toString());
+                _miOutputDataSet.add(outputData);
+            }
+        }
+        return taskNames;
+    }
+
+
+    private void persistRunners(List<YNetRunner> runners) throws YPersistenceException {
+        // do parents first
+        for (YNetRunner runner : runners) {
+            if (runner.getCaseID().getParent() == null) {
+                persistRunner(runner);
+            }
+        }
+        for (YNetRunner runner : runners) {
+            if (runner.getCaseID().getParent() != null) {
+                persistRunner(runner);
+            }
+        }
+    }
+
+
+    private void persistRunner(YNetRunner runner) throws YPersistenceException {
+        persistIdentifiers(runner);
+        persist(runner.getNetData());
+        persist(runner);
+    }
+
+
+    private void persistWorkitems(List<YWorkItem> workitems) throws YPersistenceException {
+        // do parents first
+        for (YWorkItem item : workitems) {
+            if (item.isParent()) {
+                persist(item);
+            }
+        }
+        for (YWorkItem item : workitems) {
+            if (! item.isParent()) {
+                persist(item);
+            }
+        }
+    }
+
+
+    // for MI workitems, all child items must be committed, then any that have
+    // already been completed must be removed from the db before the parent is later
+    // completed, to avoid a foreign key exception. This is only relevant to MI items,
+    // as atomic completed items will not appear in the exported workitem list.
+    private void unpersistCompletedItems(List<YWorkItem> workitems) throws YPersistenceException {
+        if (YEngine._pmgr.startTransaction()) {
+            for (YWorkItem item : workitems) {
+                if (item.hasCompletedStatus()) {
+                    YEngine._pmgr.deleteObject(item);
+                }
+            }
+            YEngine._pmgr.commit();
+        }
+    }
+
+
+    private void persistIdentifiers(YNetRunner runner) throws YPersistenceException {
+        persist(runner.getCaseID());
+        for (YIdentifier yid : runner.getCaseID().getChildren()) {
+            if (yid != null) {
+                persist(yid);
+            }
+        }
+    }
+
+
+    private void persistAll(List<YNetRunner> runners, List<YWorkItem> workitems)
+            throws YPersistenceException {
+        if (YEngine._pmgr.startTransaction()) {
+            persistRunners(runners);
+            persistWorkitems(workitems);
+            YEngine._pmgr.commit();
+            unpersistCompletedItems(workitems);
+        }
+        else throw new YPersistenceException("Could not start db transaction");
+    }
+
+
+    private void persist(Object o) throws YPersistenceException {
+        YEngine._pmgr.storeObject(o);
+    }
+
+
+    static class RunnerComparator implements Comparator<YNetRunner> {
 
         @Override
         public int compare(YNetRunner r1, YNetRunner r2) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2012 The YAWL Foundation. All rights reserved.
+ * Copyright (c) 2004-2020 The YAWL Foundation. All rights reserved.
  * The YAWL Foundation is a collaboration of individuals and
  * organisations who are committed to improving workflow technology.
  *
@@ -18,6 +18,7 @@
 
 package org.yawlfoundation.yawl.resourcing.filters;
 
+import org.yawlfoundation.yawl.engine.interfce.WorkItemRecord;
 import org.yawlfoundation.yawl.resourcing.resource.*;
 import org.yawlfoundation.yawl.resourcing.ResourceManager;
 
@@ -50,10 +51,12 @@ public class OrgFilter extends AbstractFilter {
     /**
      * Filters the distribution set passed based on position and/or org group
      * values specified
+     *
      * @param distSet the distribution set to filter
+     * @param wir the item to be allocated (unused here)
      * @return the filtered distribution set
      */
-    public Set<Participant> performFilter(Set<Participant> distSet) {
+    public Set<Participant> performFilter(Set<Participant> distSet, WorkItemRecord wir) {
         if ((distSet == null) || distSet.isEmpty()) return distSet;
         Set<Participant> result = new HashSet<Participant>();
         String posValue = getParamValue("Position");

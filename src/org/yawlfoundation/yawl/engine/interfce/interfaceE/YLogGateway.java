@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2012 The YAWL Foundation. All rights reserved.
+ * Copyright (c) 2004-2020 The YAWL Foundation. All rights reserved.
  * The YAWL Foundation is a collaboration of individuals and
  * organisations who are committed to improving workflow technology.
  *
@@ -21,11 +21,12 @@ package org.yawlfoundation.yawl.engine.interfce.interfaceE;
 import org.apache.logging.log4j.LogManager;
 import org.yawlfoundation.yawl.engine.YSpecificationID;
 import org.yawlfoundation.yawl.engine.interfce.EngineGatewayImpl;
+import org.yawlfoundation.yawl.engine.interfce.YHttpServlet;
 import org.yawlfoundation.yawl.exceptions.YPersistenceException;
 import org.yawlfoundation.yawl.logging.YLogServer;
+import org.yawlfoundation.yawl.util.StringUtil;
 
 import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -41,7 +42,7 @@ import java.io.PrintWriter;
  *  Last Date: 1/2009
  */
 
-public class YLogGateway extends HttpServlet {
+public class YLogGateway extends YHttpServlet {
 
     private YLogServer _logSvr = YLogServer.getInstance() ;
     private EngineGatewayImpl _engine ;
@@ -73,6 +74,9 @@ public class YLogGateway extends HttpServlet {
         else if (action.equalsIgnoreCase("connect")) {
             String userid = req.getParameter("userid");
             String password = req.getParameter("password");
+            if (StringUtil.strToBoolean(req.getParameter("encrypt"))) {
+                password = encryptPassword(password);
+            }
             if (_engine != null) {
                 int interval = req.getSession().getMaxInactiveInterval();
                 result = _engine.connect(userid, password, interval);
@@ -185,8 +189,10 @@ public class YLogGateway extends HttpServlet {
                 else if (action.equals("getSpecificationXESLog")) {
                     YSpecificationID specID = getSpecificationID(req);
                     String withDataStr = req.getParameter("withdata");
+                    String ignoreUnknownsStr = req.getParameter("ignoreUnknowns");
                     boolean withData = (withDataStr != null) && withDataStr.equalsIgnoreCase("true");
-                    result = _logSvr.getSpecificationXESLog(specID, withData);
+                    boolean ignoreUnknowns = (ignoreUnknownsStr != null) && ignoreUnknownsStr.equalsIgnoreCase("true");
+                    result = _logSvr.getSpecificationXESLog(specID, withData, ignoreUnknowns);
                 }
                 if (isLocalTransaction) _logSvr.commitTransaction();
             }

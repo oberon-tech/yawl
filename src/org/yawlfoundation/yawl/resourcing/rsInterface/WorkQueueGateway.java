@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2012 The YAWL Foundation. All rights reserved.
+ * Copyright (c) 2004-2020 The YAWL Foundation. All rights reserved.
  * The YAWL Foundation is a collaboration of individuals and
  * organisations who are committed to improving workflow technology.
  *
@@ -18,37 +18,29 @@
 
 package org.yawlfoundation.yawl.resourcing.rsInterface;
 
-import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.security.NoSuchAlgorithmException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import org.yawlfoundation.yawl.authentication.YExternalClient;
 import org.yawlfoundation.yawl.elements.YAWLServiceReference;
 import org.yawlfoundation.yawl.engine.YSpecificationID;
-import org.yawlfoundation.yawl.engine.interfce.Marshaller;
-import org.yawlfoundation.yawl.engine.interfce.ServletUtils;
-import org.yawlfoundation.yawl.engine.interfce.SpecificationData;
-import org.yawlfoundation.yawl.engine.interfce.WorkItemRecord;
-import org.yawlfoundation.yawl.resourcing.QueueSet;
-import org.yawlfoundation.yawl.resourcing.ResourceManager;
-import org.yawlfoundation.yawl.resourcing.TaskPrivileges;
-import org.yawlfoundation.yawl.resourcing.WorkQueue;
+import org.yawlfoundation.yawl.engine.interfce.*;
+import org.yawlfoundation.yawl.resourcing.*;
 import org.yawlfoundation.yawl.resourcing.datastore.orgdata.ResourceDataSet;
 import org.yawlfoundation.yawl.resourcing.resource.OrgGroup;
 import org.yawlfoundation.yawl.resourcing.resource.Participant;
 import org.yawlfoundation.yawl.resourcing.resource.UserPrivileges;
 import org.yawlfoundation.yawl.resourcing.util.GadgetFeeder;
-import org.yawlfoundation.yawl.util.PasswordEncryptor;
 import org.yawlfoundation.yawl.util.StringUtil;
 import org.yawlfoundation.yawl.util.XNode;
 import org.yawlfoundation.yawl.util.XNodeParser;
+import org.yawlfoundation.yawl.util.YPredicateParser;
+
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * The WorkQueue Gateway provides a gateway (or a set of API) between the Resource
@@ -60,7 +52,7 @@ import org.yawlfoundation.yawl.util.XNodeParser;
  *         Last Date: 20/09/2007
  */
 
-public class WorkQueueGateway extends HttpServlet {
+public class WorkQueueGateway extends YHttpServlet {
 
     private ResourceManager _rm = ResourceManager.getInstance();
     private ResourceMarshaller _marshaller = new ResourceMarshaller();
@@ -105,18 +97,16 @@ public class WorkQueueGateway extends HttpServlet {
         } else if (action.equalsIgnoreCase("connect")) {
             String userid = req.getParameter("userid");
             String password = req.getParameter("password");
+            if (StringUtil.strToBoolean(req.getParameter("encrypt"))) {
+                password = encryptPassword(password);
+            }
             int interval = req.getSession().getMaxInactiveInterval();
             result = _rm.serviceConnect(userid, password, interval);
         } else if (action.equalsIgnoreCase("userlogin")) {
             String userid = req.getParameter("userid");
             String password = req.getParameter("password");
-            String encrypt = req.getParameter("encrypt");
-            if ((encrypt != null) && encrypt.equalsIgnoreCase("true")) {
-                try {
-                    password = PasswordEncryptor.encrypt(password);
-                } catch (NoSuchAlgorithmException nsae) {
-                    // nothing to do - call will return 'incorrect password'
-                }
+            if (StringUtil.strToBoolean(req.getParameter("encrypt"))) {
+                password = encryptPassword(password);
             }
             result = _rm.login(userid, password, req.getSession().getId()); // user connect
         } else if (action.equalsIgnoreCase("checkConnection")) {
@@ -205,6 +195,12 @@ public class WorkQueueGateway extends HttpServlet {
         } else if (action.equals("getAdminQueues")) {
             QueueSet qSet = _rm.getAdminQueues();
             result = qSet.toXML();                                    // set never null
+        } else if (action.equals("getParticipantQueues")) {
+            Participant p = getOrgDataSet().getParticipant(pid);
+            if (p != null) {
+                QueueSet qSet = p.getWorkQueues();
+                result = qSet.toXML();                                    // set never null
+            } else result = fail("Unknown participant id: " + pid);
         } else if (action.equals("getWorkItem")) {
             result = _rm.getWorkItem(itemid);
         } else if (action.equals("getWorkItemChildren")) {
@@ -258,9 +254,6 @@ public class WorkQueueGateway extends HttpServlet {
         } else if (action.equals("getRunningCases")) {
             result = _rm.getClients().getRunningCases(
                     new YSpecificationID(specid, specversion, specuri));
-        } else if (action.equals("getCases")) {
-            result = _rm.getClients().getCases(
-                    new YSpecificationID(specid, specversion, specuri));
         } else if (action.equals("getDecompID")) {
             WorkItemRecord wir = _rm.getWorkItemCache().get(itemid);
             String decompID = _rm.getDecompID(wir);
@@ -292,6 +285,8 @@ public class WorkQueueGateway extends HttpServlet {
             result = doResourceAction(req, action);
         } else if (action.equals("completeWorkItem")) {
             result = doResourceAction(req, action);
+        } else if (action.equals("chainCase")) {
+             result = doResourceAction(req, action);
         } else if (action.equals("offerWorkItem")) {
             result = doAdminQueueAction(req, action);
         } else if (action.equals("allocateWorkItem")) {
@@ -308,6 +303,16 @@ public class WorkQueueGateway extends HttpServlet {
             result = doResourceMoveAction(req, action);
         } else if (action.equals("reallocateStatelessWorkItem")) {
             result = doResourceMoveAction(req, action);
+        } else if (action.equals("newInstance")) {
+            String newValue = req.getParameter("newValue");
+            WorkItemRecord wir = _rm.createNewWorkItemInstance(itemid, newValue);
+            if (wir != null) {
+                wir.setResourceStatus(WorkItemRecord.statusResourceUnoffered);
+                result = response(wir.toXML());
+            }
+            else {
+                result = fail("Failed to create new instance");
+            }
         } else if (action.equals("updateWorkItemCache")) {
             String wirAsXML = req.getParameter("wir");
             WorkItemRecord wir = Marshaller.unmarshalWorkItem(wirAsXML);
@@ -315,7 +320,39 @@ public class WorkQueueGateway extends HttpServlet {
                 _rm.getWorkItemCache().update(wir);
                 result = success;
             } else result = response(fail("Malformed or empty work item XML record"));
-        } else if (action.equals("synchroniseCaches")) {
+        } else if (action.equals("updateWorkQueuedItem")) {
+            String wirAsXML = req.getParameter("wir");
+            WorkItemRecord wir = Marshaller.unmarshalWorkItem(wirAsXML);
+            if (wir != null) {
+                Participant p = _rm.getOrgDataSet().getParticipant(pid);
+                if (p != null) {
+                    int queue = StringUtil.strToInt(req.getParameter("queue"), -1);       
+                    if (queue >= WorkQueue.OFFERED && queue <= WorkQueue.SUSPENDED) {
+                        _rm.getWorkItemCache().update(wir);
+                        p.getWorkQueues().getQueue(queue).refresh(wir);
+                        result = success;
+                    } else result = fail("Invalid user queue type: " + queue);
+                } else result = fail("Unknown participant: " + pid);
+            } else result = fail("Malformed or empty work item XML record");
+        }
+        else if (action.equals("setWorkItemDocumentation")) {
+           String docoText = req.getParameter("doco");
+            WorkItemRecord wir = _rm.getWorkItemCache().get(itemid);
+            if (! (wir == null || docoText == null || docoText.equals(wir.getDocumentation()))) {
+                wir.setDocumentation(new YPredicateParser().parse(docoText));
+                wir.setDocumentationChanged(true);
+                _rm.getWorkItemCache().update(wir);
+                for (Participant p : _rm.getParticipantsAssignedWorkItem(wir)) {
+                    for (WorkQueue queue : p.getWorkQueues().getActiveQueues()) {
+                         if (queue.get(itemid) != null) {
+                             queue.refresh(wir);
+                         }
+                    }
+                }
+                result = success;
+            } else result = fail("Unknown work item with id: " + itemid);
+        }
+        else if (action.equals("synchroniseCaches")) {
             _rm.sanitiseCaches();
             result = success;
         } else if (action.equals("redirectWorkItemToYawlService")) {
@@ -331,6 +368,55 @@ public class WorkQueueGateway extends HttpServlet {
             _rm.removeEventListener(uri);
             result = success;
         }
+        else if (action.equals("getChainedCases")) {
+           Participant p = getOrgDataSet().getParticipant(pid);
+           if (p != null) {
+               Set<String> cases = _rm.getChainedCases(p);
+               XNode root = new XNode("chainedcases");
+               for (String item : cases) {
+                   root.addChild("item", item);
+               }
+               result = root.toString();
+           }
+           else result = fail("Unknown participant: " + pid);
+        }
+        else if (action.equals("getPiledItems")) {
+            Participant p = getOrgDataSet().getParticipant(pid);
+            if (p != null) {
+                XNode root = new XNode("piledTasks");
+                Set<ResourceMap> taskMaps = _rm.getPiledTaskMaps(p);
+                for (ResourceMap map : taskMaps) {
+                    XNode taskNode = root.addChild("task");
+                    taskNode.addChild(map.getSpecID().toXNode());
+                    taskNode.addChild("taskid", map.getTaskID());
+                }
+                result = root.toString();
+            }
+            else result = fail("Unknown participant: " + pid);
+        }
+        else if (action.equals("unchainCase")) {
+            String caseID = req.getParameter("caseid");
+            if (caseID != null) {
+                _rm.removeChain(caseID);
+                result = success;
+            }
+            else {
+                result = fail("Missing case id parameter");
+            }
+        }
+        else if (action.equals("unpileTask")) {
+            YSpecificationID specID = new YSpecificationID(specid, specversion, specuri);
+            String taskID = req.getParameter("taskid");
+            ResourceMap map = _rm.getCachedResourceMap(specID, taskID);
+            if (map != null) {
+                Participant p = getOrgDataSet().getParticipant(pid);
+                result = _rm.unpileTask(map, p);
+            }
+            else {
+                result = fail("Unknown specification or task");
+            }
+        }
+
 
         // the following calls are convenience pass-throughs to engine interfaces A & B
 
@@ -361,6 +447,14 @@ public class WorkQueueGateway extends HttpServlet {
                 ysr.set_assignable(assignable.equals("true"));
             }
             result = response(_rm.addRegisteredService(ysr));
+        } else if (action.equals("addExternalClient")) {
+            String name = req.getParameter("name");
+            String pw = req.getParameter("password");
+            String doco = req.getParameter("doco");
+            result = response(_rm.addExternalClient(new YExternalClient(name, pw, doco)));
+        } else if (action.equals("removeExternalClient")) {
+            String id = req.getParameter("name");
+            result = response(_rm.removeExternalClient(id));
         }
 
         return result;
@@ -463,10 +557,23 @@ public class WorkQueueGateway extends HttpServlet {
                 }
 
                 if (_rm.start(p, wir)) {
-
-                    // if wir was prev. started, it is the child already
-                    WorkItemRecord child = wir.hasStatus(WorkItemRecord.statusExecuting) ?
-                            wir : _rm.getExecutingChild(wir);
+                    WorkItemRecord child;
+                    switch (wir.getStatus()) {
+                        case WorkItemRecord.statusFired :  // MI instance - refresh
+                        //    try {
+                            //    child = _rm.getEngineStoredWorkItem(wir.getID());
+                                child = _rm.getCachedWorkItem(wir.getID());
+//                            }
+//                            catch (IOException ioe) {
+//                                return ioe.getMessage();
+//                            }
+                            break;
+                        case WorkItemRecord.statusExecuting :  // already is the child
+                            child = wir; break;
+                        default :
+                            child = _rm.getExecutingChild(wir); break;
+                    }
+                    
                     if (child != null) {
                         child.setResourceStatus(WorkItemRecord.statusResourceStarted);
                         result = child.toXML();
@@ -474,6 +581,10 @@ public class WorkQueueGateway extends HttpServlet {
                             "' has started, but could not retrieve its executing child.");
                 } else result = fail("Could not start workitem: " + wir.getID());
             } else result = fail("Unoffered', 'Offered' or 'Allocated", "started", wir);
+        } else if (action.equals("completeWorkItem")) {
+            if (wir.hasResourceStatus(WorkItemRecord.statusResourceStarted)) {
+                result = _rm.checkinItem(p, wir);
+            } else result = fail("Started", "completed", wir);
         } else if (action.equals("deallocateWorkItem")) {
             if (wir.hasResourceStatus(WorkItemRecord.statusResourceAllocated)) {
                 successful = _rm.deallocateWorkItem(p, wir);
@@ -501,11 +612,12 @@ public class WorkQueueGateway extends HttpServlet {
                 successful = _rm.unsuspendWorkItem(p, wir);
                 result = successful ? success : fail("Could not unsuspend workitem: " +
                         wir.getID());
-            } else result = fail("Suspended", "unsuspended", wir);
-        } else if (action.equals("completeWorkItem")) {
-            if (wir.hasResourceStatus(WorkItemRecord.statusResourceStarted)) {
-                result = _rm.checkinItem(p, wir);
-            } else result = fail("Started", "completed", wir);
+            }
+            else result = fail("Suspended", "unsuspended", wir);
+        } else if (action.equals("chainCase")) {
+            if (wir.hasResourceStatus(WorkItemRecord.statusResourceOffered)) {
+                result = _rm.chainCase(p, wir);
+            } else result = fail("Offered", "chained", wir);
         }
         return result;
     }
@@ -576,11 +688,6 @@ public class WorkQueueGateway extends HttpServlet {
     }
 
 
-    private String fail(String msg) {
-        return "<failure>" + msg + "</failure>";
-    }
-
-
     private String fail(String reqStatus, String action, WorkItemRecord wir) {
         return fail(reqStatus, action, wir.getID(), wir.getResourceStatus());
     }
@@ -590,11 +697,6 @@ public class WorkQueueGateway extends HttpServlet {
         return fail(String.format(
                 "Only a workitem with '%s' status can be %s. Workitem '%s' has '%s' status.",
                 reqStatus, action, itemid, hasStatus));
-    }
-
-
-    private String response(String inner) {
-        return StringUtil.wrap(inner, "response");
     }
 
 }

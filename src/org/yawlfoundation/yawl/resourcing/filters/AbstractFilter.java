@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2012 The YAWL Foundation. All rights reserved.
+ * Copyright (c) 2004-2020 The YAWL Foundation. All rights reserved.
  * The YAWL Foundation is a collaboration of individuals and
  * organisations who are committed to improving workflow technology.
  *
@@ -18,7 +18,7 @@
 
 package org.yawlfoundation.yawl.resourcing.filters;
 
-import org.jdom2.Element;
+import org.yawlfoundation.yawl.engine.interfce.WorkItemRecord;
 import org.yawlfoundation.yawl.resourcing.AbstractSelector;
 import org.yawlfoundation.yawl.resourcing.resource.Participant;
 
@@ -100,9 +100,11 @@ public abstract class AbstractFilter extends AbstractSelector {
      * whatever filtering the class has been created to do.
      *
      * @param resources a distribution set of Participant objects
+     * @param wir the item to be allocated
      * @return the resultant filtered distribution set
      */
-    public abstract Set<Participant> performFilter(Set<Participant> resources);
+    public abstract Set<Participant> performFilter(Set<Participant> resources,
+                                                   WorkItemRecord wir);
 
 }
 

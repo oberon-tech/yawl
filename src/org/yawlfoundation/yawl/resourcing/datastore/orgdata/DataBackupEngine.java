@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2012 The YAWL Foundation. All rights reserved.
+ * Copyright (c) 2004-2020 The YAWL Foundation. All rights reserved.
  * The YAWL Foundation is a collaboration of individuals and
  * organisations who are committed to improving workflow technology.
  *
@@ -19,21 +19,12 @@
 package org.yawlfoundation.yawl.resourcing.datastore.orgdata;
 
 
-import java.util.ArrayList;
-import java.util.Hashtable;
-import java.util.List;
-import java.util.Set;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jdom2.Document;
 import org.jdom2.Element;
 import org.yawlfoundation.yawl.resourcing.ResourceManager;
-import org.yawlfoundation.yawl.resourcing.resource.Capability;
-import org.yawlfoundation.yawl.resourcing.resource.OrgGroup;
-import org.yawlfoundation.yawl.resourcing.resource.Participant;
-import org.yawlfoundation.yawl.resourcing.resource.Position;
-import org.yawlfoundation.yawl.resourcing.resource.Role;
+import org.yawlfoundation.yawl.resourcing.resource.*;
 import org.yawlfoundation.yawl.resourcing.resource.nonhuman.NonHumanCategory;
 import org.yawlfoundation.yawl.resourcing.resource.nonhuman.NonHumanResource;
 import org.yawlfoundation.yawl.resourcing.resource.nonhuman.NonHumanSubCategory;
@@ -42,6 +33,8 @@ import org.yawlfoundation.yawl.util.JDOMUtil;
 import org.yawlfoundation.yawl.util.StringUtil;
 import org.yawlfoundation.yawl.util.XNode;
 import org.yawlfoundation.yawl.util.XNodeParser;
+
+import java.util.*;
 
 /**
  * @author Michael Adams
@@ -100,12 +93,16 @@ public class DataBackupEngine {
                 xml.append(StringUtil.wrapEscaped(p.getPassword(), "password")) ;
                 xml.append(StringUtil.wrapEscaped(p.getFirstName(), "firstname"));
                 xml.append(StringUtil.wrapEscaped(p.getLastName(), "lastname"));
-                xml.append(StringUtil.wrapEscaped(p.getMail(), "mail"));
+                xml.append(StringUtil.wrapEscaped(p.getEmail(), "email"));
                 xml.append(StringUtil.wrapEscaped(p.getDescription(), "description"));
                 xml.append(StringUtil.wrapEscaped(p.getNotes(), "notes"));
 
                 xml.append(StringUtil.wrapEscaped(String.valueOf(p.isAdministrator()),
                         "isAdministrator")) ;
+                xml.append(StringUtil.wrapEscaped(String.valueOf(p.isEmailOnAllocation()),
+                        "isEmailOnAllocation")) ;
+                xml.append(StringUtil.wrapEscaped(String.valueOf(p.isEmailOnOffer()),
+                        "isEmailOnOffer")) ;
 
                 xml.append("<roles>");
                 for (Role role : p.getRoles())
@@ -153,12 +150,17 @@ public class DataBackupEngine {
             if (n.getDescription() != null) {
                 resource.addChild("description", n.getDescription(), true);
             }
-            if (n.getNotes() != null) resource.addChild("notes", n.getNotes(), true);
-            XNode category = resource.addChild("category");
-            category.addAttribute("id", n.getCategory().getID());
-            String subcat = n.getSubCategoryName();
-            if (! StringUtil.isNullOrEmpty(subcat)) {
-                resource.addChild("subcategory", subcat, true);
+            if (n.getNotes() != null) {
+                resource.addChild("notes", n.getNotes(), true);
+            }
+            NonHumanCategory category = n.getCategory();
+            if (category != null) {
+                XNode nCategory = resource.addChild("category");
+                nCategory.addAttribute("id", n.getCategory().getID());
+                String subcat = n.getSubCategoryName();
+                if (!StringUtil.isNullOrEmpty(subcat)) {
+                    resource.addChild("subcategory", subcat, true);
+                }
             }
         }
         return top.toString();
@@ -191,7 +193,7 @@ public class DataBackupEngine {
     private String importCapabilities(Element capElem) {
         String result = "Capabilities: 0 in imported file.";
         if (capElem != null) {
-            if (orgDataSet.isDataEditable("Capability")) {
+            if (orgDataSet.isDataEditable(ResourceDataSet.ResUnit.Capability)) {
                 int added = 0;
                 List<Element> capList = capElem.getChildren();
                 for (Element cap : capList) {
@@ -217,7 +219,7 @@ public class DataBackupEngine {
     private String importNonHumanCategories(Element nhcElem) {
         String result = "NonHumanCategories: 0 in imported file.";
         if (nhcElem != null) {
-            if (orgDataSet.isDataEditable("NonHumanCategory")) {
+            if (orgDataSet.isDataEditable(ResourceDataSet.ResUnit.NonHumanCategory)) {
                 int added = 0;
                 List<Element> children = nhcElem.getChildren();
                 for (Element nhc : children) {
@@ -252,7 +254,7 @@ public class DataBackupEngine {
     private String importNonHumanResources(Element nhrElem) {
         String result = "NonHumanResources: 0 in imported file.";
         if (nhrElem != null) {
-            if (orgDataSet.isDataEditable("NonHumanResource")) {
+            if (orgDataSet.isDataEditable(ResourceDataSet.ResUnit.NonHumanResource)) {
                 int added = 0;
                 List<Element> children = nhrElem.getChildren();
                 for (Element nhr : children) {
@@ -261,15 +263,18 @@ public class DataBackupEngine {
                     if ((r == null) && (! orgDataSet.isKnownNonHumanResourceName(
                             nhr.getChildText("name")))) {
                         r = new NonHumanResource(nhr);
-                        String catID = nhr.getChild("category").getAttributeValue("id");
-                        NonHumanCategory category = orgDataSet.getNonHumanCategory(catID);
-                        if (category != null) {
-                            r.setCategory(category);
-                            String subcat = nhr.getChildText("subcategory");
-                            if (! StringUtil.isNullOrEmpty(subcat)) {
-                                r.setSubCategory(subcat);
+                        Element eCategory = nhr.getChild("category");
+                        if (eCategory != null) {
+                            String catID = eCategory.getAttributeValue("id");
+                            NonHumanCategory category = orgDataSet.getNonHumanCategory(catID);
+                            if (category != null) {
+                                r.setCategory(category);
+                                String subcat = nhr.getChildText("subcategory");
+                                if (!StringUtil.isNullOrEmpty(subcat)) {
+                                    r.setSubCategory(subcat);
+                                }
                             }
-                        }    
+                        }
                         orgDataSet.importNonHumanResource(r);
                         added++;
                     }
@@ -287,8 +292,8 @@ public class DataBackupEngine {
     private String importRoles(Element roleElem) {
         String result = "Roles: 0 in imported file.";
         if (roleElem != null) {
-            if (orgDataSet.isDataEditable("Role")) {
-                Hashtable<String, Role> cyclics = new Hashtable<String, Role>();
+            if (orgDataSet.isDataEditable(ResourceDataSet.ResUnit.Role)) {
+                Map<String, Set<Role>> cyclics = new HashMap<>();
                 int added = 0;
                 List<Element> children = roleElem.getChildren();
                 for (Element role : children) {
@@ -300,7 +305,7 @@ public class DataBackupEngine {
                         // ensure all roles created before cyclic refs are added
                         Element belongsTo = role.getChild("belongsToID");
                         if (belongsTo != null) {
-                            cyclics.put(belongsTo.getText(), r);
+                            addToCyclicSet(cyclics, belongsTo.getText(), r);
                         }
                         r.reconstitute(role);
                         orgDataSet.importRole(r);
@@ -308,9 +313,11 @@ public class DataBackupEngine {
                     }
                 }
                 for (String id : cyclics.keySet()) {
-                    Role r = cyclics.get(id);
-                    r.setOwnerRole(orgDataSet.getRole(id));
-                    orgDataSet.updateRole(r);
+                    Role owner = orgDataSet.getRole(id);
+                    for (Role r : cyclics.get(id)) {
+                        r.setOwnerRole(owner);
+                        orgDataSet.updateRole(r);
+                    }
                 }
                 result = String.format("Roles: %d/%d imported.", added, children.size());
             }
@@ -325,8 +332,8 @@ public class DataBackupEngine {
     private String importOrgGroups(Element ogElem) {
         String result = "OrgGroup: 0 in imported file.";
         if (ogElem != null) {
-            if (orgDataSet.isDataEditable("OrgGroup")) {
-                Hashtable<String, OrgGroup> cyclics = new Hashtable<String, OrgGroup>();
+            if (orgDataSet.isDataEditable(ResourceDataSet.ResUnit.OrgGroup)) {
+                Map<String, Set<OrgGroup>> cyclics = new HashMap<>();
                 int added = 0;
                 List<Element> children = ogElem.getChildren();
                 for (Element group : children) {
@@ -338,7 +345,7 @@ public class DataBackupEngine {
                         // ensure all OrgGroups created before cyclic refs are added
                         Element belongsTo = group.getChild("belongsToID");
                         if (belongsTo != null) {
-                            cyclics.put(belongsTo.getText(), og);
+                            addToCyclicSet(cyclics, belongsTo.getText(), og);
                         }
                         og.reconstitute(group);
                         orgDataSet.importOrgGroup(og);
@@ -346,9 +353,11 @@ public class DataBackupEngine {
                     }
                 }
                 for (String id : cyclics.keySet()) {
-                    OrgGroup og = cyclics.get(id);
-                    og.setBelongsTo(orgDataSet.getOrgGroup(id));
-                    orgDataSet.updateOrgGroup(og);
+                    OrgGroup belongsTo = orgDataSet.getOrgGroup(id);
+                    for (OrgGroup og : cyclics.get(id)) {
+                        og.setBelongsTo(belongsTo);
+                        orgDataSet.updateOrgGroup(og);
+                    }
                 }
                 result = String.format("OrgGroups: %d/%d imported.", added, children.size());
             }
@@ -363,8 +372,8 @@ public class DataBackupEngine {
     private String importPositions(Element posElem) {
         String result = "Positions: 0 in imported file.";
         if (posElem != null) {
-            if (orgDataSet.isDataEditable("OrgGroup")) {
-                Hashtable<String, Position> cyclics = new Hashtable<String, Position>();
+            if (orgDataSet.isDataEditable(ResourceDataSet.ResUnit.Position)) {
+                Map<String, Set<Position>> cyclics = new HashMap<>();
                 int added = 0;
                 List<Element> children = posElem.getChildren();
                 for (Element pos : children) {
@@ -376,7 +385,7 @@ public class DataBackupEngine {
                         // ensure all Positions created before cyclic refs are added
                         Element reportsTo = pos.getChild("reportstoid");
                         if (reportsTo != null) {
-                            cyclics.put(reportsTo.getText(), p);
+                            addToCyclicSet(cyclics, reportsTo.getText(), p);
                         }
                         p.reconstitute(pos);
 
@@ -389,9 +398,11 @@ public class DataBackupEngine {
                     }
                 }
                 for (String id : cyclics.keySet()) {
-                    Position p = cyclics.get(id);
-                    p.setReportsTo(orgDataSet.getPosition(id));
-                    orgDataSet.updatePosition(p);
+                    Position reportsTo = orgDataSet.getPosition(id);
+                    for (Position p : cyclics.get(id)) {
+                        p.setReportsTo(reportsTo);
+                        orgDataSet.updatePosition(p);
+                    }
                 }
                 result = String.format("Positions: %d/%d imported.", added, children.size());
             }
@@ -407,7 +418,7 @@ public class DataBackupEngine {
         String result = "Participants: 0 in imported file.";
         int added = 0;
         if (pElem != null) {
-            if (orgDataSet.isDataEditable("Participant")) {
+            if (orgDataSet.isDataEditable(ResourceDataSet.ResUnit.Participant)) {
                 List<Element> children = pElem.getChildren();
                 for (Element part : children) {
                     String id = part.getAttributeValue("id");
@@ -416,8 +427,6 @@ public class DataBackupEngine {
                         p = new Participant();
                         p.reconstitute(part);
                         p.setPassword(part.getChildText("password"));
-                        p.setDescription(part.getChildText("description"));
-                        p.setNotes(part.getChildText("notes"));
                         addParticipantToResourceGroup(p, part, "roles");
                         addParticipantToResourceGroup(p, part, "positions");
                         addParticipantToResourceGroup(p, part, "capabilities");
@@ -455,6 +464,12 @@ public class DataBackupEngine {
                 }
             }
         }
+    }
+
+
+    private <T> void addToCyclicSet(Map<String, Set<T>> map, String key, T value) {
+        Set<T> set = map.computeIfAbsent(key, k -> new HashSet<>());
+        set.add(value);
     }
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2012 The YAWL Foundation. All rights reserved.
+ * Copyright (c) 2004-2020 The YAWL Foundation. All rights reserved.
  * The YAWL Foundation is a collaboration of individuals and
  * organisations who are committed to improving workflow technology.
  *
@@ -31,6 +31,7 @@ import org.yawlfoundation.yawl.resourcing.interactions.ResourceParseException;
 import org.yawlfoundation.yawl.resourcing.resource.nonhuman.NonHumanCategory;
 import org.yawlfoundation.yawl.resourcing.resource.nonhuman.NonHumanResource;
 import org.yawlfoundation.yawl.util.XNode;
+import org.yawlfoundation.yawl.util.XNodeParser;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -64,6 +65,9 @@ public class SecondaryResources {
     }
 
 
+    public void fromXML(String xml) { _defaultDataSet.fromXML(xml); }
+
+
     public void parse(Element e, Namespace nsYawl) throws ResourceParseException {
         _defaultDataSet.parse(e, nsYawl);
     }
@@ -90,7 +94,7 @@ public class SecondaryResources {
     }
 
 
-    public boolean available(WorkItemRecord wir) {
+    public boolean available(WorkItemRecord wir) throws YResourceUnavailableException {
         return getDataSet(wir).available(wir);
     }
 
@@ -149,19 +153,25 @@ public class SecondaryResources {
     }
 
 
-    private void announceUnavailable(AbstractResource resource, WorkItemRecord wir) {
+    private void announceUnavailable(AbstractResource resource, WorkItemRecord wir)
+            throws YResourceUnavailableException{
         ResourceManager.getInstance().getClients().announceResourceUnavailable(
                 resource, wir, false);
-        _log.warn("Secondary Resource '{}' unavailable for work item: {}",
-                resource.getName(), wir.getID());
+        String msg = String.format("Secondary Resource '%s' is unavailable for work item: %s",
+                        resource.getName(), wir.getID());
+        _log.warn(msg);
+        throw new YResourceUnavailableException(msg);
     }
 
 
-    private void announceUnavailable(String name, WorkItemRecord wir) {
+    private void announceUnavailable(String name, WorkItemRecord wir)
+            throws YResourceUnavailableException{
         ResourceManager.getInstance().getClients().announceResourceUnavailable(
                 null, wir, false);
-        _log.warn("There are no available members of '{}' to allocate as a secondary" +
-                " resource for work item: {}", name, wir.getID());
+        String msg = String.format("There are no available members of '%s' to allocate as a secondary" +
+                        " resource for work item: %s", name, wir.getID());
+        _log.warn(msg);
+        throw new YResourceUnavailableException(msg);
     }
 
 
@@ -410,7 +420,7 @@ public class SecondaryResources {
         }
 
 
-        public boolean available(WorkItemRecord wir) {
+        public boolean available(WorkItemRecord wir) throws YResourceUnavailableException {
             return getResourcesCount() == selectResources(wir).size();
         }
 
@@ -512,6 +522,24 @@ public class SecondaryResources {
         }
 
 
+        protected void fromXML(String xml) {
+            clear();
+            XNode secondary = new XNodeParser(true).parse(xml);
+            for (XNode node : secondary.getChildren("participant")) {
+                addParticipant(node.getText());
+            }
+            for (XNode node : secondary.getChildren("role")) {
+                addRole(node.getText());
+            }
+            for (XNode node : secondary.getChildren("nonHumanResource")) {
+                addNonHumanResource(node.getText());
+            }
+            for (XNode node : secondary.getChildren("nonHumanCategory")) {
+                addNonHumanCategory(node.getText(), node.getAttributeValue("subcategory"));
+            }
+        }
+
+
         protected void parse(Element e, Namespace nsYawl) throws ResourceParseException {
             if (e == null) return;
             for (Element ePart : e.getChildren("participant", nsYawl)) {
@@ -530,10 +558,15 @@ public class SecondaryResources {
 
 
         protected void engage(WorkItemRecord wir) {
-            if (hasResources()) {
-                for (AbstractResource resource : selectResources(wir)) {
-                    EventLogger.log(wir, resource.getID(), EventLogger.event.busy);
+            try {
+                if (hasResources()) {
+                    for (AbstractResource resource : selectResources(wir)) {
+                        EventLogger.log(wir, resource.getID(), EventLogger.event.busy);
+                    }
                 }
+            }
+            catch (YResourceUnavailableException e) {
+                // never thrown in this method's context
             }
         }
 
@@ -549,7 +582,8 @@ public class SecondaryResources {
 
 
 
-        protected List<AbstractResource> selectResources(WorkItemRecord wir) {
+        protected List<AbstractResource> selectResources(WorkItemRecord wir)
+                throws YResourceUnavailableException{
             List<AbstractResource> selected = new ArrayList<AbstractResource>();
             if (hasResources()) {
                 for (Participant p : participants) {

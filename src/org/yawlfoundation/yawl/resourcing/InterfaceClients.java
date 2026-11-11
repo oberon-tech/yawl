@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2012 The YAWL Foundation. All rights reserved.
+ * Copyright (c) 2004-2020 The YAWL Foundation. All rights reserved.
  * The YAWL Foundation is a collaboration of individuals and
  * organisations who are committed to improving workflow technology.
  *
@@ -24,6 +24,7 @@ import org.yawlfoundation.yawl.engine.interfce.interfaceB.InterfaceB_Environment
 import org.yawlfoundation.yawl.engine.interfce.interfaceE.YLogGatewayClient;
 import org.yawlfoundation.yawl.resourcing.client.CostClient;
 import org.yawlfoundation.yawl.resourcing.client.DocStoreClient;
+import org.yawlfoundation.yawl.resourcing.client.MailClient;
 import org.yawlfoundation.yawl.resourcing.datastore.eventlog.EventLogger;
 import org.yawlfoundation.yawl.resourcing.resource.AbstractResource;
 import org.yawlfoundation.yawl.resourcing.rsInterface.ResourceGatewayServer;
@@ -47,9 +48,10 @@ public class InterfaceClients extends AbstractEngineClient {
 
     // client reference objects
     private YLogGatewayClient _interfaceEClient;
-    private ResourceGatewayServer _gatewayServer;
+    private final ResourceGatewayServer _gatewayServer;
     private CostClient _costServiceClient;
     private DocStoreClient _docStoreClient;
+    private MailClient _mailServiceClient;
 
     private static final String DEF_URI = "http://localhost:8080/resourceService/ib";
     private static final String SERVICE_NAME = "resourceService";
@@ -77,7 +79,8 @@ public class InterfaceClients extends AbstractEngineClient {
      * @param docStoreURI the URI of the Document Store
      */
     public void initClients(String engineURI, String exceptionURI,
-                        String schedulingURI, String costServiceURI, String docStoreURI) {
+                            String schedulingURI, String costServiceURI,
+                            String docStoreURI, String mailServiceURI) {
         initEngineURI(engineURI);
         if (engineURI != null) {
             _interfaceEClient = new YLogGatewayClient(
@@ -99,6 +102,10 @@ public class InterfaceClients extends AbstractEngineClient {
             _docStoreClient = new DocStoreClient(
                     docStoreURI, _engineLogonName, _engineLogonPassword);
         }
+        if (mailServiceURI != null) {
+             _mailServiceClient = new MailClient(
+                     mailServiceURI, _engineLogonName, _engineLogonPassword);
+         }
     }
 
 
@@ -215,10 +222,11 @@ public class InterfaceClients extends AbstractEngineClient {
 
     // Interface E methods //
 
-    public String getEngineXESLog(YSpecificationID specID, boolean withData) {
+    public String getEngineXESLog(YSpecificationID specID, boolean withData,
+                                  boolean ignoreUnknownLabels) {
         try {
             return _interfaceEClient.getSpecificationXESLog(specID, withData,
-                                                     getSessionHandle());
+                    ignoreUnknownLabels, getSessionHandle());
         }
         catch (IOException ioe) {
             return null;
@@ -246,6 +254,10 @@ public class InterfaceClients extends AbstractEngineClient {
     public boolean hasDocStoreClient() { return _docStoreClient != null; }
 
     public DocStoreClient getDocStoreClient() { return _docStoreClient; }
+
+    public boolean hasMailClient() { return _mailServiceClient != null; }
+
+    public MailClient getMailClient() { return _mailServiceClient; }
 
     public boolean hasExceptionServiceEnabled() { return (_exceptionServiceURI != null); }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2012 The YAWL Foundation. All rights reserved.
+ * Copyright (c) 2004-2025 The YAWL Foundation. All rights reserved.
  * The YAWL Foundation is a collaboration of individuals and
  * organisations who are committed to improving workflow technology.
  *
@@ -18,11 +18,6 @@
 
 package org.yawlfoundation.yawl.resourcing.codelets;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-
 import org.jdom2.Element;
 import org.yawlfoundation.yawl.elements.data.YParameter;
 import org.yawlfoundation.yawl.resourcing.ResourceManager;
@@ -30,55 +25,59 @@ import org.yawlfoundation.yawl.resourcing.datastore.orgdata.ResourceDataSet;
 import org.yawlfoundation.yawl.resourcing.resource.Participant;
 import org.yawlfoundation.yawl.resourcing.resource.Position;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 /**
- * @author Michael Adams
- * @date 7/03/2011
+ * @author Paul Tyson <paul.tyson@oberontech.com>
  */
 public class DirectReports extends AbstractCodelet {
 
-    public DirectReports() {
-	super();
-	setDescription("This codelet returns a list of userids that report directly to the<br> "
-		+ "specified position name.<br> " + "Input: positionname (string type).<br>"
-		+ "Output: directreportids (string type, comma-separated list of user ids)");
-    }
-
-    public Element execute(Element inData, List<YParameter> inParams, List<YParameter> outParams)
-	    throws CodeletExecutionException {
-	ResourceManager rm = ResourceManager.getInstance();
-	setInputs(inData, inParams, outParams);
-	String positionName = getValue("positionname");
-
-	String reportIds = "";
-
-	ResourceDataSet rds = rm.getOrgDataSet();
-	Position pos = rds.getPositionByLabel(positionName);
-	if (null != pos) {
-	    Set<Participant> reports = rds.getParticipantsReportingToPosition(pos);
-	    if (null != reports) {
-		reportIds = reports.stream().filter(a -> rds.getImmediateSupervisor(a).hasPosition(pos))
-			.map(a -> a.getUserID()).collect(Collectors.joining(","));
-	    }
+	public DirectReports() {
+		super();
+		setDescription("This codelet returns a list of userids that report directly to the<br> "
+				+ "specified position name.<br> " + "Input: positionname (string type).<br>"
+				+ "Output: directreportids (string type, comma-separated list of user ids)");
 	}
-	setParameterValue("directreportids", reportIds);
 
-	return getOutputData();
-    }
+	public Element execute(Element inData, List<YParameter> inParams, List<YParameter> outParams)
+			throws CodeletExecutionException {
+		ResourceManager rm = ResourceManager.getInstance();
+		setInputs(inData, inParams, outParams);
+		String positionName = getValue("positionname");
 
-    public List<YParameter> getRequiredParams() {
-	List<YParameter> params = new ArrayList<YParameter>();
+		String reportIds = "";
 
-	YParameter param = new YParameter(null, YParameter._INPUT_PARAM_TYPE);
-	param.setDataTypeAndName("string", "positionname", XSD_NAMESPACE);
-	param.setDocumentation("The name of a position");
-	params.add(param);
+		ResourceDataSet rds = rm.getOrgDataSet();
+		Position pos = rds.getPositionByLabel(positionName);
+		if (null != pos) {
+			Set<Participant> reports = rds.getParticipantsReportingToPosition(pos);
+			if (null != reports) {
+				reportIds = reports.stream().filter(a -> rds.getImmediateSupervisor(a).hasPosition(pos))
+						.map(a -> a.getUserID()).collect(Collectors.joining(","));
+			}
+		}
+		setParameterValue("directreportids", reportIds);
 
-	param = new YParameter(null, YParameter._OUTPUT_PARAM_TYPE);
-	param.setDataTypeAndName("string", "directreportids", XSD_NAMESPACE);
-	param.setDocumentation("The userids reporting to the position name");
-	params.add(param);
+		return getOutputData();
+	}
 
-	return params;
-    }
+	public List<YParameter> getRequiredParams() {
+		List<YParameter> params = new ArrayList<YParameter>();
+
+		YParameter param = new YParameter(null, YParameter._INPUT_PARAM_TYPE);
+		param.setDataTypeAndName("string", "positionname", XSD_NAMESPACE);
+		param.setDocumentation("The name of a position");
+		params.add(param);
+
+		param = new YParameter(null, YParameter._OUTPUT_PARAM_TYPE);
+		param.setDataTypeAndName("string", "directreportids", XSD_NAMESPACE);
+		param.setDocumentation("The userids reporting to the position name");
+		params.add(param);
+
+		return params;
+	}
 
 }

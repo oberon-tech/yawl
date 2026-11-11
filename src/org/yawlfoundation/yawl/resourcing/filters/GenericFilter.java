@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2004-2012 The YAWL Foundation. All rights reserved.
+ * Copyright (c) 2004-2020 The YAWL Foundation. All rights reserved.
  * The YAWL Foundation is a collaboration of individuals and
  * organisations who are committed to improving workflow technology.
  *
@@ -18,6 +18,7 @@
 
 package org.yawlfoundation.yawl.resourcing.filters;
 
+import org.yawlfoundation.yawl.engine.interfce.WorkItemRecord;
 import org.yawlfoundation.yawl.resourcing.resource.Participant;
 
 import java.util.Map;
@@ -41,6 +42,8 @@ public class GenericFilter extends AbstractFilter {
 
     public GenericFilter(String name, Map<String, String> params) { super(name, params); }
 
-    public Set<Participant> performFilter(Set<Participant> resources) { return null; }
+    public Set<Participant> performFilter(Set<Participant> resources, WorkItemRecord wir) {
+        return null;
+    }
 
 }
