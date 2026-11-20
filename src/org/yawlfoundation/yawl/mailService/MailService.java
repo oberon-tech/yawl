@@ -18,7 +18,14 @@
 
 package org.yawlfoundation.yawl.mailService;
 
-import org.jdom2.Element;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Properties;
+import java.util.stream.Collectors;
+
 import org.simplejavamail.email.Email;
 import org.simplejavamail.email.EmailBuilder;
 import org.simplejavamail.email.EmailPopulatingBuilder;
@@ -31,11 +38,6 @@ import org.yawlfoundation.yawl.engine.interfce.WorkItemRecord;
 import org.yawlfoundation.yawl.engine.interfce.interfaceB.InterfaceBWebsideController;
 import org.yawlfoundation.yawl.util.MailSettings;
 import org.yawlfoundation.yawl.util.StringUtil;
-
-import javax.mail.Message;
-import java.io.IOException;
-import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * A service that provides for emails to be sent by tasks
@@ -87,6 +89,11 @@ public class MailService extends InterfaceBWebsideController {
     // decomposition when this service is selected from the list
     public YParameter[] describeRequiredParams() {
         YParameter[] params = new YParameter[14];
+
+        YParameter contentParam = createParameter(YParameter._INPUT_PARAM_TYPE, "string",
+                "content", "The content of the email", false);
+        contentParam.addAttribute("isCDATA", "true");
+
         params[0] = createParameter(YParameter._INPUT_PARAM_TYPE, "string",
                 "senderName", "The name of the person or system who is sending the email", false);
         params[1] = createParameter(YParameter._INPUT_PARAM_TYPE, "string",
@@ -101,8 +108,7 @@ public class MailService extends InterfaceBWebsideController {
                 "BCC", "The email address to BCC the email to", true);
         params[6] = createParameter(YParameter._INPUT_PARAM_TYPE, "string", "subject",
                 "The subject of the email", false);
-        params[7] = createParameter(YParameter._INPUT_PARAM_TYPE, "string", "content",
-                "The content of the email", false);
+        params[7] = contentParam;
         params[8] = createParameter(YParameter._INPUT_PARAM_TYPE, "string", "host",
                 "The host mail server url (e.g. smtp.example.com)", true);
         params[9] = createParameter(YParameter._INPUT_PARAM_TYPE, "int", "port",
