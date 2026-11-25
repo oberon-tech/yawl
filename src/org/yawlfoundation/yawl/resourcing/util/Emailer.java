@@ -15,7 +15,7 @@ import com.mailersend.sdk.exceptions.MailerSendException;
 import com.microsoft.graph.models.*;
 import com.microsoft.graph.serviceclient.GraphServiceClient;
 import com.microsoft.graph.users.item.sendmail.SendMailPostRequestBody;
-import org.simplejavamail.mailer.config.TransportStrategy;
+import org.simplejavamail.api.mailer.config.TransportStrategy;
 import org.yawlfoundation.yawl.engine.interfce.WorkItemRecord;
 import org.yawlfoundation.yawl.resourcing.WorkQueue;
 import org.yawlfoundation.yawl.resourcing.client.MailClient;

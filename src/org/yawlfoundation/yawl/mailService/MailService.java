@@ -19,23 +19,26 @@
 package org.yawlfoundation.yawl.mailService;
 
 import org.jdom2.Element;
-import org.simplejavamail.email.Email;
+import org.simplejavamail.api.email.Email;
+import org.simplejavamail.api.email.EmailPopulatingBuilder;
+import org.simplejavamail.api.email.IRecipientBuilder;
+import org.simplejavamail.api.email.Recipient;
+import org.simplejavamail.api.mailer.Mailer;
+import org.simplejavamail.api.mailer.config.TransportStrategy;
 import org.simplejavamail.email.EmailBuilder;
-import org.simplejavamail.email.EmailPopulatingBuilder;
-import org.simplejavamail.email.Recipient;
-import org.simplejavamail.mailer.Mailer;
 import org.simplejavamail.mailer.MailerBuilder;
-import org.simplejavamail.mailer.config.TransportStrategy;
+import org.simplejavamail.recipient.RecipientBuilder;
 import org.yawlfoundation.yawl.elements.data.YParameter;
 import org.yawlfoundation.yawl.engine.interfce.WorkItemRecord;
 import org.yawlfoundation.yawl.engine.interfce.interfaceB.InterfaceBWebsideController;
 import org.yawlfoundation.yawl.util.MailSettings;
 import org.yawlfoundation.yawl.util.StringUtil;
 
-import javax.mail.Message;
 import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import jakarta.mail.Message;
 
 /**
  * A service that provides for emails to be sent by tasks
@@ -252,11 +255,12 @@ public class MailService extends InterfaceBWebsideController {
         String toName = StringUtil.defaultString(settings.toName);
         List<String> toAddresses = new ArrayList<>(Arrays.asList(
                 settings.toAddress.split(";")));
-        List<Recipient> ccRecipients = asRecipientList(settings.ccAddress,
-                Message.RecipientType.CC);
-        List<Recipient> bccRecipients = asRecipientList(settings.bccAddress,
-                Message.RecipientType.BCC);
-
+//        List<Recipient> toRecipients = asRecipientList(settings.toAddress,Message.RecipientType.TO);
+//        List<Recipient> ccRecipients = asRecipientList(settings.ccAddress,
+//                Message.RecipientType.CC);
+//        List<Recipient> bccRecipients = asRecipientList(settings.bccAddress,
+//                Message.RecipientType.BCC);
+/*
         _logger.debug(
                 String.format("Building email with from=%s, to=%s, cc=%s, bcc=%s, subject=%s",
                         fromAddress,
@@ -266,13 +270,21 @@ public class MailService extends InterfaceBWebsideController {
                 "<" + bccRecipients.stream().map(Recipient::getAddress).collect(
                         Collectors.joining(",")) + ">",
                 StringUtil.defaultString(settings.subject)));
+*/
+                _logger.debug("Configuring email builder...");
 
         EmailPopulatingBuilder emailBuilder = EmailBuilder.startingBlank()
-                .from(fromName, fromAddress)
-                .to(toName, toAddresses)
-                .cc(ccRecipients)
-                .bcc(bccRecipients)
-                .withSubject(settings.subject);
+                .from("System", "donotreply@titaniadelivery.com");
+//                .withRecipients(new RecipientBuilder().withName(toName).withAddress(settings.toAddress).withType(Message.RecipientType.TO).build())
+//                .withRecipients(ccRecipients)
+//               .withRecipients(bccRecipients)
+ //               .withSubject(settings.subject);
+
+                _logger.debug("Sucessfully configured email builder: " + (null != emailBuilder));
+                emailBuilder = emailBuilder.withRecipients(new RecipientBuilder().withName(toName).withAddress(settings.toAddress).withType(Message.RecipientType.TO).build());
+_logger.debug("Successfully added TO recipients: " + (null != emailBuilder));
+emailBuilder = emailBuilder.withSubject(settings.subject);
+_logger.debug("Successfully add subject: " + (null != emailBuilder));
 
         String body = StringUtil.defaultString(settings.content);
         if (body.contains("<")) {
@@ -351,7 +363,7 @@ public class MailService extends InterfaceBWebsideController {
                                             Message.RecipientType recipientType) {
         if (! StringUtil.isNullOrEmpty(recipients)) {
             return Arrays.stream(recipients.split(";")).map(s -> {
-                return new Recipient(null, s, recipientType);
+                return new RecipientBuilder().withType(recipientType).withAddress(s).build();
             }).collect(Collectors.toList());
         }
         return Collections.emptyList();
