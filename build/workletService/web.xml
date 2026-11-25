@@ -24,7 +24,7 @@
             The URL of the engine's interface B.
         </description>
         <param-name>InterfaceB_BackEnd</param-name>
-        <param-value>http://localhost:8080/yawl/ib</param-value>
+        <param-value>http://@tomcat.host@:@tomcat.port@/yawl/ib</param-value>
     </context-param>
 
     <context-param>
@@ -125,7 +125,7 @@
             admin pages
         </description>
         <param-name>ResourceServiceURL</param-name>
-        <param-value>http://localhost:8080/resourceService</param-value>
+        <param-value>http://@tomcat.host@:@tomcat.port@/resourceService</param-value>
     </context-param>
 
     <!--CharsetFilter -->

@@ -43,7 +43,7 @@
             the tasks that are not associated with any other custom service.
         </description>
         <param-name>DefaultWorklist</param-name>
-        <param-value>http://localhost:8080/resourceService/ib#resource</param-value>
+        <param-value>http://@tomcat.host@:@tomcat.port@/resourceService/ib#resource</param-value>
     </context-param>
 
     <context-param>
@@ -187,7 +187,7 @@
             <!--Multiple uris can be specified, separated by semi-colons ';'-->
         <!--</description>-->
         <!--<param-name>InterfaceXListener</param-name>-->
-        <!--<param-value>http://localhost:8080/costService/ix</param-value>-->
+        <!--<param-value>http://@tomcat.host@:@tomcat.port@/costService/ix</param-value>-->
     <!--</context-param>-->
 
     <!--CharsetFilter -->

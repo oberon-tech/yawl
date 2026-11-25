@@ -43,7 +43,7 @@
             The URL of the engine's interface X.
         </description>
         <param-name>InterfaceX_BackEnd</param-name>
-        <param-value>http://localhost:8080/yawl/ix</param-value>
+        <param-value>http://@tomcat.host@:@tomcat.port@/yawl/ix</param-value>
     </context-param>
 
     <context-param>
@@ -51,7 +51,7 @@
             The URL of the engine's log interface.
         </description>
         <param-name>EngineLogGateway</param-name>
-        <param-value>http://localhost:8080/yawl/logGateway</param-value>
+        <param-value>http://@tomcat.host@:@tomcat.port@/yawl/logGateway</param-value>
     </context-param>
 
     <context-param>
@@ -59,7 +59,7 @@
             The URL of the resource service's log interface.
         </description>
         <param-name>ResourceServiceLogGateway</param-name>
-        <param-value>http://localhost:8080/resourceService/logGateway</param-value>
+        <param-value>http://@tomcat.host@:@tomcat.port@/resourceService/logGateway</param-value>
     </context-param>
 
     <context-param>
@@ -67,7 +67,7 @@
             The URL of the resource service's org data interface.
         </description>
         <param-name>ResourceServiceOrgDataGateway</param-name>
-        <param-value>http://localhost:8080/resourceService/gateway</param-value>
+        <param-value>http://@tomcat.host@:@tomcat.port@/resourceService/gateway</param-value>
     </context-param>
 
     <context-param>

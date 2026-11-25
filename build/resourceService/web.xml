@@ -21,7 +21,7 @@
             The URL of the engine's interface B.
         </description>
         <param-name>InterfaceB_BackEnd</param-name>
-        <param-value>http://localhost:8080/yawl/ib</param-value>
+        <param-value>http://@tomcat.host@:@tomcat.port@/yawl/ib</param-value>
     </context-param>
 
     <context-param>
@@ -295,7 +295,7 @@
             The URL of the cost service.
         </description>
         <param-name>CostService_BackEnd</param-name>
-        <param-value>http://localhost:8080/costService/gateway</param-value>
+        <param-value>http://@tomcat.host@:@tomcat.port@/costService/gateway</param-value>
     </context-param>
 
 
@@ -306,7 +306,7 @@
             The URL of the document store.
         </description>
         <param-name>DocStore_BackEnd</param-name>
-        <param-value>http://localhost:8080/documentStore/</param-value>
+        <param-value>http://@tomcat.host@:@tomcat.port@/documentStore/</param-value>
     </context-param>
 
     <!-- This param, when available, enables the service to send worklist notifications
@@ -317,7 +317,7 @@
             The URL of the mail service.
         </description>
         <param-name>MailService_BackEnd</param-name>
-        <param-value>http://localhost:8080/mailService/gateway</param-value>
+        <param-value>http://@tomcat.host@:@tomcat.port@/mailService/gateway</param-value>
     </context-param>
 
     <!-- This param, when available, enables scheduling announcements to a
@@ -328,7 +328,7 @@
               The URL of the scheduling service.
            </description>
            <param-name>InterfaceS_BackEnd</param-name>
-           <param-value>http://localhost:8080/schedulingService</param-value>
+           <param-value>http://@tomcat.host@:@tomcat.port@/schedulingService</param-value>
         </context-param>
     -->
 

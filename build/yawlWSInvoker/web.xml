@@ -13,7 +13,7 @@
         This is the YAWL Web Service Invoker Interface.
         It performs invokations of previously specified web services by dynamically looking
         up and binding to them.   The web service needs to be described by WSDL.
-        Copyright © 2003 Queensland University of Technology. All rights reserved.
+        Copyright ï¿½ 2003 Queensland University of Technology. All rights reserved.
         Author: Lachlan Aldred
         Date: 28/1/2004
         Time: 15:44:01
@@ -31,7 +31,7 @@
             The URL of the engine's interface B.
         </description>
         <param-name>InterfaceB_BackEnd</param-name>
-        <param-value>http://localhost:8080/yawl/ib</param-value>
+        <param-value>http://@tomcat.host@:@tomcat.port@/yawl/ib</param-value>
     </context-param>
 
     <context-param>
